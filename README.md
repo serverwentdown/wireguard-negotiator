@@ -11,8 +11,12 @@ In summary:
 
 * Manage "client" keys
 * Exchange keys over HTTP(S)
+* Exchange IP addressing (DHCP-like)
 * Manually gate new peers
+* Sets up network interface on the "client"
 * Generate Ansible INI inventory
+
+The primary scenario this tool is going to be used for is to manage machines using Ansible within an unknown LAN behind NAT. I am planning to use it for FOSSASIA Summit 2020.
 
 ## Limitations
 

@@ -41,6 +41,19 @@ func runServer(ctx *cli.Context) error {
 	}
 	listen := ctx.String("listen")
 
+	// TODO: Rate limiting
+
+	http.HandleFunc("/pub", func(w http.ResponseWriter, r *http.Request) {
+		// Produce the public key
+	})
+
+	http.HandleFunc("/request", func(w http.ResponseWriter, r *http.Request) {
+		// Ensure public key is new
+		// Assign an IP address
+		// Enqueue request into the gate
+		// Wait for flush of configuration
+	})
+
 	log.Println(inter)
 	log.Println(config)
 	log.Println(listen)
