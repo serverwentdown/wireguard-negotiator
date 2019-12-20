@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -93,10 +94,10 @@ func runServer(ctx *cli.Context) error {
 	}
 	_, interfIPNet, err = net.ParseCIDR(interfAddrs[0].String())
 
-	addQueue := make(chan request)
+	addQueue := make(chan request, 1)
 	go adder(addQueue, inter, config)
 
-	gateQueue := make(chan request)
+	gateQueue := make(chan request, 1)
 	go gater(gateQueue, addQueue)
 
 	// TODO: Rate limiting
@@ -106,6 +107,7 @@ func runServer(ctx *cli.Context) error {
 		case "POST":
 			publicKey := r.PostFormValue("PublicKey")
 			// TODO: Ensure public key is new
+			// TODO: Validate public key
 			if len(publicKey) == 0 {
 				w.WriteHeader(400)
 				return
@@ -134,15 +136,19 @@ func runServer(ctx *cli.Context) error {
 				IP:   ip,
 				Mask: interfIPNet.Mask,
 			}
+			netIPNet := &net.IPNet{
+				IP:   interfIPNet.IP.Mask(interfIPNet.Mask),
+				Mask: interfIPNet.Mask,
+			}
 			resp := struct {
-				InterfaceIPs                string
-				AllowedIPs                  string
+				InterfaceIPs                []string
+				AllowedIPs                  []string
 				PublicKey                   string
 				Endpoint                    string
 				PersistentKeepaliveInterval int
 			}{
-				ipNet.String(),
-				interfIPNet.IP.Mask(interfIPNet.Mask).String(),
+				[]string{ipNet.String()},
+				[]string{netIPNet.String()},
 				serverPublicKey,
 				endpoint,
 				25,
@@ -155,6 +161,11 @@ func runServer(ctx *cli.Context) error {
 		}
 	})
 
+	server := &http.Server{
+		Addr:    listen,
+		Handler: http.DefaultServeMux,
+	}
+
 	// Shutdown notifier
 	go func() {
 		sigint := make(chan os.Signal, 1)
@@ -162,14 +173,12 @@ func runServer(ctx *cli.Context) error {
 		<-sigint
 		close(gateQueue)
 		close(addQueue)
-		/*
-			if err := http.Shutdown(context.Background()); err != nil {
-				log.Printf("Server shutdown error: %v\n", err)
-			}
-		*/
+		if err := server.Shutdown(context.Background()); err != nil {
+			log.Printf("Server shutdown error: %v\n", err)
+		}
 	}()
 
-	return http.ListenAndServe(listen, nil)
+	return server.ListenAndServe()
 }
 
 func adder(queue chan request, inter string, config string) {
@@ -183,10 +192,12 @@ func adder(queue chan request, inter string, config string) {
 			err := configAddPeer(config, req)
 			if err != nil {
 				log.Println(err)
+				continue
 			}
 			err = interAddPeer(inter, req, config)
 			if err != nil {
 				log.Println(err)
+				continue
 			}
 		}
 	}
