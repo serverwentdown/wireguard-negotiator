@@ -32,7 +32,7 @@ The primary scenario this tool is going to be used for is to manage machines usi
 
 ## Server
 
-The "server" manages a WireGuard interface, treating a WireGuard configuration file as a database. It assumes this interface and configuration exists. It only adds new peers to the configuration file and interface, and does not delete existing configuration. 
+The "server" manages a WireGuard interface, ~~treating a WireGuard configuration file as a database~~ (TODO). It assumes this interface and configuration exists. It only adds new peers to the configuration file and interface, and does not delete existing configuration. 
 
 The "server" also exposes the HTTP server with the following endpoints:
 
