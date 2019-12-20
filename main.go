@@ -13,19 +13,7 @@ func main() {
 	app := &cli.App{
 		Name:  "wireguard-negotiator",
 		Usage: "Exchange WireGuard keys over HTTP(S)",
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:    "server",
-				Aliases: []string{"s"},
-				Usage:   "wireguard-negotiator server URL",
-				EnvVars: []string{"WGN_SERVER_URL"},
-			},
-			&cli.BoolFlag{
-				Name:    "insecure",
-				Usage:   "Disable TLS verification",
-				EnvVars: []string{"WGN_SERVER_INSECURE"},
-			},
-		},
+		Flags: []cli.Flag{},
 		Commands: []*cli.Command{
 			cmd.CmdServer,
 			cmd.CmdList,
