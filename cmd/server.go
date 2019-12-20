@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 
 	"github.com/urfave/cli/v2"
 	"gopkg.in/ini.v1"
@@ -28,6 +29,12 @@ var CmdServer = &cli.Command{
 			Usage:       "Path to the WireGuard configuration file",
 		},
 		&cli.StringFlag{
+			Name:    "endpoint",
+			Aliases: []string{"e"},
+			Value:   "",
+			Usage:   "Set the endpoint address",
+		},
+		&cli.StringFlag{
 			Name:    "listen",
 			Aliases: []string{"l"},
 			Value:   ":8080",
@@ -44,11 +51,35 @@ type request struct {
 
 func runServer(ctx *cli.Context) error {
 	inter := ctx.String("interface")
+	interf, err := net.InterfaceByName(inter)
+	if err != nil {
+		log.Fatal(err)
+	}
 	config := ctx.String("config")
 	if !ctx.IsSet("config") {
 		config = "/etc/wireguard/" + inter + ".conf"
 	}
+	endpoint := ctx.String("endpoint")
+	if !ctx.IsSet("endpoint") {
+		log.Fatal("Please specify endpoint with -endpoint")
+	}
 	listen := ctx.String("listen")
+
+	// Obtain the server's public key
+	serverPublicKey := configReadInterfacePublicKey(config)
+
+	terribleCounterThatShouldNotExist := 1
+	interfAddrs, err := interf.Addrs()
+	if err != nil {
+		log.Fatal(err)
+	}
+	// TODO: Define this allocation method
+	// TODO: Include allocation behaviour in README
+	var interfIPNet *net.IPNet
+	if len(interfAddrs) < 1 {
+		log.Fatal("No address found on the interface")
+	}
+	_, interfIPNet, err = net.ParseCIDR(interfAddrs[0].String())
 
 	addQueue := make(chan request)
 	go adder(addQueue, inter, config)
@@ -58,21 +89,41 @@ func runServer(ctx *cli.Context) error {
 
 	// TODO: Rate limiting
 
-	http.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
-		// Produce the public key
-	})
-
 	http.HandleFunc("/request", func(w http.ResponseWriter, r *http.Request) {
-		// Ensure public key is new
+		publicKey := r.PostFormValue("public_key")
+		// TODO: Ensure public key is new
 		// Assign an IP address
+		terribleCounterThatShouldNotExist += 1
+		ip := incrementIP(interfIPNet.IP, terribleCounterThatShouldNotExist)
+		if !interfIPNet.Contains(ip) {
+			log.Fatal("Ran out of IP addresses to allocate")
+		}
 		// Enqueue request into the gate
+		req := request{
+			ip:        ip,
+			publicKey: publicKey,
+		}
 		// Wait for flush of configuration
+		gateQueue <- req
 		// Produce configuration to client
+		ipNet := &net.IPNet{
+			IP:   ip,
+			Mask: interfIPNet.Mask,
+		}
+		resp := struct {
+			interfaceIP    string `json:"interface_ip"`
+			peerAllowedIPs string `json:"peer_allowed_ips"`
+			peerPublicKey  string `json:"peer_public_key"`
+			peerEndpoint   string `json:"peer_endpoint"`
+		}{
+			ipNet.String(),
+			interfIPNet.IP.Mask(interfIPNet.Mask),
+			"",
+			"",
+		}
 	})
 
-	log.Println(inter)
-	log.Println(config)
-	log.Println(listen)
+	http.ListenAndServe(listen, nil)
 
 	return nil
 }
@@ -81,7 +132,7 @@ func adder(queue chan request, inter string, config string) {
 	// Write requests to config and add peer
 	for req := range queue {
 		configAddPeer(config, req)
-		interAddPeer(inter, req)
+		interAddPeer(inter, req, config)
 	}
 }
 
@@ -120,6 +171,28 @@ func configAddPeer(config string, req request) {
 	}
 }
 
+func configReadInterfacePublicKey(config string) string {
+	cfg, err := ini.Load(config)
+	if err != nil {
+		log.Fatal("Failed to read interface public key")
+	}
+
+	return cfg.Section("Interface").Key("PrivateKey")
+}
+
+func interAddPeer(inter string, req request, config string) {
+	// For every request, we also need to dynamically add the peer to the interface
+
+	// For now, we simply run one fixed command to reread from the config file
+	cmd := exec.Command("wg", "setconf", inter, config)
+	err := cmd.Run()
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+// Helpers
+
 func ipToIPNetWithHostMask(ip net.IP) net.IPNet {
 	if ip4 := ip.To4(); ip4 != nil {
 		return net.IPNet{
@@ -133,6 +206,11 @@ func ipToIPNetWithHostMask(ip net.IP) net.IPNet {
 	}
 }
 
-func interAddPeer(inter string, req request) {
-
+func incrementIP(ip net.IP) net.IP {
+	for i := len(ip) - 1; i >= 0; i-- {
+		ip[i]++
+		if ip[i] != 0 {
+			break
+		}
+	}
 }
