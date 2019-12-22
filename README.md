@@ -1,7 +1,7 @@
 
 # wireguard-negotiator
 
-A not-very-secure manual WireGuard negotiator
+Not-very-secure manual WireGuard negotiator
 
 ## Purpose
 
@@ -9,10 +9,10 @@ A not-very-secure manual WireGuard negotiator
 
 In summary:
 
-* Manage "client" keys
+* Set up "client" keys
 * Exchange keys over HTTP(S)
 * Exchange IP addressing
-* Manually gate new peers
+* Manually gate new "clients"
 * Sets up network interface on the "client"
 * Generate Ansible INI inventory
 
@@ -21,7 +21,8 @@ The primary scenario this tool is going to be used for is to manage machines usi
 ## Limitations
 
 * Linux-only
-* Manages existing config files only
+* Relies on the `wg` and `systemctl` commands
+* Server manages existing config files only
 * Removing peers is a manual process
 
 # Usage
@@ -34,7 +35,13 @@ The "server" manages a WireGuard interface, ~~treating a WireGuard configuration
 wireguard-negotiator server --endpoint wireguard-endpoint:port
 ```
 
-The "server" also exposes the HTTP server with the following endpoints:
+It can generate an Ansible inventory on the same system. This reads off the same WireGuard configuration file as a database.
+
+```
+wireguard-negotiator ansible-inventory --group test > inventory
+```
+
+The "server" exposes the HTTP server with the following endpoints:
 
 ### `POST /request`
 
@@ -65,9 +72,9 @@ Content-Type: application/json
 The "client" sets up a WireGuard interface, and relies on network backends to do so. *It should not be run more than once*. The following network backends are supported:
 
 - (Not implemented) `none`: Creates an interface and WireGuard configuration file
-- `networkd`: Creates a `systemd.netdev` file in `/etc/systemd/network`
+- `networkd`: Creates a `systemd.netdev` and `systemd.network` file in `/etc/systemd/network`
 
-It does so by performing `POST /request` to the "server".
+It obtains peer and interface configuration by performing `POST /request` to the "server".
 
 ```
 wireguard-negotiator request --server https://url-of-server
