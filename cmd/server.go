@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/serverwentdown/wireguard-negotiator/lib"
 	"github.com/urfave/cli/v2"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 	"gopkg.in/ini.v1"
@@ -140,13 +141,7 @@ func runServer(ctx *cli.Context) error {
 				IP:   interfIPNet.IP.Mask(interfIPNet.Mask),
 				Mask: interfIPNet.Mask,
 			}
-			resp := struct {
-				InterfaceIPs                []string
-				AllowedIPs                  []string
-				PublicKey                   string
-				Endpoint                    string
-				PersistentKeepaliveInterval int
-			}{
+			resp := lib.PeerConfigResponse{
 				[]string{ipNet.String()},
 				[]string{netIPNet.String()},
 				serverPublicKey,
@@ -219,16 +214,16 @@ func gater(queue chan request, result chan request) {
 }
 
 func configAddPeer(config string, req request) error {
-	// For every request, we'll just open the config file again and rewrite it
-	// We don't need to optimise this because it happens infrequently
+	// For every request, open the config file again and rewrite it. Acceptable
+	// because this happens infrequently
 
-	// Preferably in the future, we treat the configuration as a database
+	// Preferably in the future, treat the configuration as a database
 
-	// For now, we append to the config file
+	// For now, append to the config file
 	cfg := ini.Empty()
 	sec, _ := cfg.NewSection("Peer")
 	publicKey := sec.Key("PublicKey")
-	// TODO: Do we need validation?
+	// TODO: Validation is needed
 	publicKey.SetValue(req.publicKey)
 	allowedIPs := sec.Key("AllowedIPs")
 	allowedHost := ipToIPNetWithHostMask(req.ip)
@@ -261,9 +256,9 @@ func configReadInterfacePublicKey(config string) (string, error) {
 }
 
 func interAddPeer(inter string, req request, config string) error {
-	// For every request, we also need to dynamically add the peer to the interface
+	// For every request, dynamically add the peer to the interface
 
-	// For now, we simply run one fixed command to reread from the config file
+	// For now, simply run one fixed command to reread from the config file
 	cmd := exec.Command("wg", "setconf", inter, config)
 	err := cmd.Run()
 	if err != nil {
@@ -271,8 +266,6 @@ func interAddPeer(inter string, req request, config string) error {
 	}
 	return nil
 }
-
-// Helpers
 
 func ipToIPNetWithHostMask(ip net.IP) net.IPNet {
 	if ip4 := ip.To4(); ip4 != nil {
