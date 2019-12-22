@@ -29,11 +29,26 @@ The primary scenario this tool is going to be used for is to manage machines usi
 
 ## Server
 
-The "server" manages a WireGuard interface, ~~treating a WireGuard configuration file as a database~~ (TODO). It assumes this interface and configuration exists. It only adds new peers to the configuration file and interface, and does not delete existing configuration. 
+The "server" manages a WireGuard interface, treating a WireGuard configuration file as a database. It assumes this interface and configuration exists. 
 
 ```
 wireguard-negotiator server --endpoint wireguard-endpoint:port
 ```
+
+1. On start:
+   1. Read and apply WireGuard configuration file if `--apply-on-start` is set (Equivalent to wg setconf)
+   2. Read from interface PublicKey and ListenPort
+   3. Read from interface all IPNets
+2. On request:
+   1. Check if PublicKey is already configured in a Peer or pending
+   2. Assign first/random available IP for every interface IPNet
+      1. Unavailable is any existing interface IPNets, Peer AllowedIPs and pending IPs
+   3. Gate requests
+   4. Switch rejected
+      1. If rejected, remove from pending
+   5. Apply Config with ReplacePeers false and new Peer
+   6. Save Device into WireGuard configuration file (Almost equivalent to wg showconf)
+   7. Return PeerConfigResponse
 
 It can generate an Ansible inventory on the same system. This reads off the same WireGuard configuration file as a database.
 
@@ -45,7 +60,7 @@ The "server" exposes the HTTP server with the following endpoints:
 
 ### `POST /request`
 
-Request for the assignment of an IP address and accepted as a peer. This blocks until the server has finished configuring the peer, therefore the client SHOULD NOT timeout. 
+Request for the assignment of an IP address and accepted as a peer. This blocks until the server has finished configuring the peer.
 
 #### Request Body
 

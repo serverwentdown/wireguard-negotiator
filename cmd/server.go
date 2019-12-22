@@ -35,7 +35,7 @@ var CmdServer = &cli.Command{
 			Aliases:     []string{"c"},
 			Value:       "",
 			DefaultText: "/etc/wireguard/<interface>.conf",
-			Usage:       "Path to the existing WireGuard configuration file",
+			Usage:       "Path to the existing WireGuard configuration file. WARNING: wireguard-negotiator will remove any comments in the file",
 		},
 		&cli.StringFlag{
 			Name:     "endpoint",
