@@ -16,9 +16,8 @@ func main() {
 		Flags: []cli.Flag{},
 		Commands: []*cli.Command{
 			cmd.CmdServer,
-			cmd.CmdList,
-			cmd.CmdApprove,
 			cmd.CmdRequest,
+			cmd.CmdDump,
 		},
 	}
 
