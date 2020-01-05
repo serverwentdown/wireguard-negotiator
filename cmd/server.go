@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -50,6 +51,11 @@ var CmdServer = &cli.Command{
 			Value:   ":8080",
 			Usage:   "Listen on this address",
 		},
+		&cli.BoolFlag{
+			Name:    "interactive",
+			Aliases: []string{"I"},
+			Usage:   "Enable interactive prompt before accepting new peers",
+		},
 	},
 	Action: runServer,
 }
@@ -67,6 +73,7 @@ func runServer(ctx *cli.Context) error {
 	}
 	endpoint := ctx.String("endpoint")
 	listen := ctx.String("listen")
+	interactive := ctx.Bool("interactive")
 
 	// Obtain the network interface
 	interf, err := net.InterfaceByName(inter)
@@ -95,11 +102,17 @@ func runServer(ctx *cli.Context) error {
 	}
 	_, interfIPNet, err = net.ParseCIDR(interfAddrs[0].String())
 
-	addQueue := make(chan request, 1)
+	// Set up interactive stuff
+	lineReader := bufio.NewReader(os.Stdin)
+	if !interactive {
+		lineReader = nil
+	}
+
+	addQueue := make(chan request, 0)
 	go adder(addQueue, inter, config)
 
-	gateQueue := make(chan request, 1)
-	go gater(gateQueue, addQueue)
+	gateQueue := make(chan request, 0)
+	go gater(gateQueue, addQueue, lineReader)
 
 	// TODO: Rate limiting
 
@@ -173,6 +186,8 @@ func runServer(ctx *cli.Context) error {
 		}
 	}()
 
+	log.Printf("Server listening on %v\n", listen)
+
 	return server.ListenAndServe()
 }
 
@@ -198,17 +213,45 @@ func adder(queue chan request, inter string, config string) {
 	}
 }
 
-func gater(queue chan request, result chan request) {
+func gater(queue chan request, result chan request, lineReader *bufio.Reader) {
 	// Receive requests and prompt the admin
 	for {
 		select {
 		case req, ok := <-queue:
 			if !ok {
-				break
+				return
 			}
-			// For now, accept all
-			log.Println(req.ip.String(), req.publicKey)
-			result <- req
+			fmt.Println(req.ip.String(), req.publicKey)
+
+			done := false
+			allowed := false
+
+			if lineReader == nil {
+				done = true
+				allowed = true
+			}
+
+			for !done {
+				fmt.Print("Allow? (y/n) ")
+				line, err := lineReader.ReadString('\n')
+				if err != nil {
+					log.Println(err)
+					return
+				}
+
+				switch line[:len(line)-1] {
+				case "y", "yes":
+					done = true
+					allowed = true
+				case "n", "no":
+					done = true
+					allowed = false
+				}
+			}
+
+			if allowed {
+				result <- req
+			}
 		}
 	}
 }
