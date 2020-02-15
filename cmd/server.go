@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -55,6 +56,11 @@ var CmdServer = &cli.Command{
 			Name:    "interactive",
 			Aliases: []string{"I"},
 			Usage:   "Enable interactive prompt before accepting new peers",
+		},
+		&cli.BoolFlag{
+			Name:    "bin",
+			Aliases: []string{"B"},
+			Usage:   "Serve the current wireguard-negotiator binary file upon GET request to /",
 		},
 	},
 	Action: runServer,
@@ -116,6 +122,28 @@ func runServer(ctx *cli.Context) error {
 
 	// TODO: Rate limiting
 
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			bin, err := os.Executable()
+			if err != nil {
+				w.WriteHeader(500)
+				return
+			}
+			file, err := os.Open(bin)
+			if err != nil {
+				w.WriteHeader(500)
+				return
+			}
+			_, err = io.Copy(w, file)
+			if err != nil {
+				log.Println("WARNING: Write binary executable to response failed")
+				return
+			}
+		default:
+			w.WriteHeader(405)
+		}
+	})
 	http.HandleFunc("/request", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
